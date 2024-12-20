@@ -1,118 +1,85 @@
+// server/routes/lifeDesign.js
 const express = require('express');
 const router = express.Router();
 const LifeDesign = require('../models/LifeDesign');
 
-// Get all active life designs for a user
+// Get user's life design data
 router.get('/:nationalId', async (req, res) => {
-    try {
-        const plans = await LifeDesign.find({ 
-            nationalId: req.params.nationalId,
-            isActive: true 
-        }).sort('-createdAt');
-        res.json(plans);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    const lifeDesign = await LifeDesign.findOne({ nationalId: req.params.nationalId });
+    res.json(lifeDesign || { categories: [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Get specific life design details
-router.get('/detail/:id', async (req, res) => {
-    try {
-        const plan = await LifeDesign.findById(req.params.id);
-        if (!plan) {
-            return res.status(404).json({ error: 'แผนเป้าหมายไม่พบ' });
-        }
-        res.json(plan);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+// Save goals for a category
+router.post('/save', async (req, res) => {
+  try {
+    const { nationalId, category, type, goals } = req.body;
+    
+    let lifeDesign = await LifeDesign.findOne({ nationalId });
+    if (!lifeDesign) {
+      lifeDesign = new LifeDesign({ 
+        nationalId,
+        categories: []
+      });
     }
+
+    const categoryIndex = lifeDesign.categories.findIndex(c => c.name === category);
+    if (categoryIndex >= 0) {
+      if (type === 'short') {
+        lifeDesign.categories[categoryIndex].shortTermGoals = goals;
+      } else {
+        lifeDesign.categories[categoryIndex].longTermGoals = goals;
+      }
+      lifeDesign.categories[categoryIndex].lastModified = new Date();
+    } else {
+      const newCategory = {
+        name: category,
+        shortTermGoals: type === 'short' ? goals : [],
+        longTermGoals: type === 'long' ? goals : [],
+        lastModified: new Date()
+      };
+      lifeDesign.categories.push(newCategory);
+    }
+
+    await lifeDesign.save();
+    res.json({ success: true, lifeDesign });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Create new life design plan
-router.post('/create', async (req, res) => {
-    try {
-        const { nationalId, values, goals } = req.body;
-
-        // Validate required fields
-        if (!values || !values.length) {
-            return res.status(400).json({ error: 'กรุณาเลือกคุณค่าที่สำคัญอย่างน้อย 1 ข้อ' });
-        }
-        if (!goals || !goals.workingMemory || !goals.cognition || !goals.lifeBalance) {
-            return res.status(400).json({ error: 'กรุณากรอกเป้าหมายให้ครบทุกด้าน' });
-        }
-
-        const newPlan = new LifeDesign({
-            nationalId,
-            values,
-            goals
-        });
-
-        await newPlan.save();
-        res.json({
-            success: true,
-            message: 'สร้างแผนเป้าหมายสำเร็จ',
-            plan: newPlan
-        });
-    } catch (error) {
-        console.error('Create plan error:', error);
-        res.status(400).json({ 
-            error: error.message || 'เกิดข้อผิดพลาดในการสร้างแผนเป้าหมาย'
-        });
+// Toggle goal completion status
+router.post('/toggle-goal', async (req, res) => {
+  try {
+    const { nationalId, category, type, goalId } = req.body;
+    
+    const lifeDesign = await LifeDesign.findOne({ nationalId });
+    if (!lifeDesign) {
+      return res.status(404).json({ error: 'Life design not found' });
     }
-});
 
-// Delete life design plan (soft delete)
-router.put('/delete/:id', async (req, res) => {
-    try {
-        const plan = await LifeDesign.findById(req.params.id);
-        if (!plan) {
-            return res.status(404).json({ error: 'แผนเป้าหมายไม่พบ' });
-        }
-
-        plan.isActive = false;
-        await plan.save();
-
-        res.json({
-            success: true,
-            message: 'ลบแผนเป้าหมายสำเร็จ'
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+    const categoryData = lifeDesign.categories.find(c => c.name === category);
+    if (!categoryData) {
+      return res.status(404).json({ error: 'Category not found' });
     }
-});
 
-// Check if user has any existing plans
-router.get('/check/:nationalId', async (req, res) => {
-    try {
-        const existingPlans = await LifeDesign.find({
-            nationalId: req.params.nationalId,
-            isActive: true
-        }).countDocuments();
-
-        res.json({
-            hasExistingPlans: existingPlans > 0
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+    const goals = type === 'short' ? categoryData.shortTermGoals : categoryData.longTermGoals;
+    const goalIndex = goals.findIndex(g => g._id.toString() === goalId);
+    
+    if (goalIndex === -1) {
+      return res.status(404).json({ error: 'Goal not found' });
     }
-});
 
-// Get latest plan
-router.get('/latest/:nationalId', async (req, res) => {
-    try {
-        const latestPlan = await LifeDesign.findOne({
-            nationalId: req.params.nationalId,
-            isActive: true
-        }).sort('-createdAt');
+    goals[goalIndex].completed = !goals[goalIndex].completed;
+    await lifeDesign.save();
 
-        if (!latestPlan) {
-            return res.status(404).json({ error: 'ไม่พบแผนเป้าหมาย' });
-        }
-
-        res.json(latestPlan);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;
