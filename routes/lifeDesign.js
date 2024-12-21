@@ -15,60 +15,56 @@ router.get("/:nationalId", async (req, res) => {
   }
 });
 
-router.post("/save", async (req, res) => {
+router.post('/save', async (req, res) => {
   try {
     const { nationalId, category, shortTermGoal, longTermGoal } = req.body;
-
+    
     let lifeDesign = await LifeDesign.findOne({ nationalId });
     if (!lifeDesign) {
       lifeDesign = new LifeDesign({
         nationalId,
-        categories: [],
+        categories: []
       });
     }
 
-    const existingCategory = lifeDesign.categories.find(
-      (c) => c.name === category
-    );
+    const existingCategory = lifeDesign.categories.find(c => c.name === category);
     if (existingCategory) {
-      existingCategory.shortTermGoals.push({
+      // แทนที่ข้อมูลเก่าด้วยข้อมูลใหม่
+      existingCategory.shortTermGoals = [{
         type: shortTermGoal.type,
-        text: shortTermGoal.text,
-      });
-      existingCategory.longTermGoals.push({
+        text: shortTermGoal.text
+      }];
+      existingCategory.longTermGoals = [{
         type: longTermGoal.type,
-        text: longTermGoal.text,
-      });
+        text: longTermGoal.text
+      }];
       existingCategory.lastModified = new Date();
     } else {
       lifeDesign.categories.push({
         name: category,
-        shortTermGoals: [
-          {
-            type: shortTermGoal.type,
-            text: shortTermGoal.text,
-          },
-        ],
-        longTermGoals: [
-          {
-            type: longTermGoal.type,
-            text: longTermGoal.text,
-          },
-        ],
-        lastModified: new Date(),
+        shortTermGoals: [{
+          type: shortTermGoal.type,
+          text: shortTermGoal.text
+        }],
+        longTermGoals: [{
+          type: longTermGoal.type,
+          text: longTermGoal.text
+        }],
+        lastModified: new Date()
       });
     }
 
     await lifeDesign.save();
     res.json({ success: true, lifeDesign });
   } catch (error) {
-    console.error("Error saving life design:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
+    console.error('Error saving life design:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
     });
   }
 });
+
 // Toggle goal completion status
 router.post("/toggle-goal", async (req, res) => {
   try {
