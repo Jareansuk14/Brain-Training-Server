@@ -16,41 +16,40 @@ router.get('/:nationalId', async (req, res) => {
 // Save goals for a category
 router.post('/save', async (req, res) => {
   try {
-    const { nationalId, category, type, goals } = req.body;
+    const { nationalId, category, shortTermGoal, longTermGoal } = req.body;
     
     let lifeDesign = await LifeDesign.findOne({ nationalId });
     if (!lifeDesign) {
-      lifeDesign = new LifeDesign({ 
+      lifeDesign = new LifeDesign({
         nationalId,
         categories: []
       });
     }
 
-    const categoryIndex = lifeDesign.categories.findIndex(c => c.name === category);
-    if (categoryIndex >= 0) {
-      if (type === 'short') {
-        lifeDesign.categories[categoryIndex].shortTermGoals = goals;
-      } else {
-        lifeDesign.categories[categoryIndex].longTermGoals = goals;
-      }
-      lifeDesign.categories[categoryIndex].lastModified = new Date();
+    const existingCategory = lifeDesign.categories.find(c => c.name === category);
+    if (existingCategory) {
+      existingCategory.shortTermGoals.push({ text: shortTermGoal });
+      existingCategory.longTermGoals.push({ text: longTermGoal });
+      existingCategory.lastModified = new Date();
     } else {
-      const newCategory = {
+      lifeDesign.categories.push({
         name: category,
-        shortTermGoals: type === 'short' ? goals : [],
-        longTermGoals: type === 'long' ? goals : [],
+        shortTermGoals: [{ text: shortTermGoal }],
+        longTermGoals: [{ text: longTermGoal }],
         lastModified: new Date()
-      };
-      lifeDesign.categories.push(newCategory);
+      });
     }
 
     await lifeDesign.save();
     res.json({ success: true, lifeDesign });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error saving life design:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
   }
 });
-
 // Toggle goal completion status
 router.post('/toggle-goal', async (req, res) => {
   try {
