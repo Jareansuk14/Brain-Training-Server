@@ -16,7 +16,7 @@ router.get('/:nationalId', async (req, res) => {
 // Save goals for a category
 router.post('/save', async (req, res) => {
   try {
-    const { nationalId, category, shortTermGoal, longTermGoal } = req.body;
+    const { nationalId, category, shortTermGoals, longTermGoals } = req.body;
     
     let lifeDesign = await LifeDesign.findOne({ nationalId });
     if (!lifeDesign) {
@@ -28,14 +28,14 @@ router.post('/save', async (req, res) => {
 
     const existingCategory = lifeDesign.categories.find(c => c.name === category);
     if (existingCategory) {
-      existingCategory.shortTermGoals.push({ text: shortTermGoal });
-      existingCategory.longTermGoals.push({ text: longTermGoal });
+      existingCategory.shortTermGoals.push(...shortTermGoals);
+      existingCategory.longTermGoals.push(...longTermGoals);
       existingCategory.lastModified = new Date();
     } else {
       lifeDesign.categories.push({
         name: category,
-        shortTermGoals: [{ text: shortTermGoal }],
-        longTermGoals: [{ text: longTermGoal }],
+        shortTermGoals,
+        longTermGoals,
         lastModified: new Date()
       });
     }
