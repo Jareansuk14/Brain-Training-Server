@@ -11,6 +11,7 @@ const lifeDesignRoutes  = require('./routes/lifeDesign')
 const activitySevenRoutes = require('./routes/activitySeven')
 const activityEightRoutes = require('./routes/activityEight')
 const emotionRoutes = require('./routes/emotion');
+const gameResultsRouter = require('./routes/gameResults');
 const app = express();
 
 // Connect Database
@@ -30,6 +31,7 @@ app.use('/api/life-design', lifeDesignRoutes);
 app.use('/api/activity-seven', activitySevenRoutes); 
 app.use('/api/activity-eight', activityEightRoutes); 
 app.use('/api/emotion', emotionRoutes);
+app.use('/api/game-results', gameResultsRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
