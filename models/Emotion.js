@@ -2,41 +2,65 @@
 const mongoose = require('mongoose');
 
 const emotionSchema = new mongoose.Schema({
-    nationalId: {
-        type: String,
-        required: true,
-        validate: {
-            validator: function(v) {
-                return /^\d{13}$/.test(v);
-            },
-            message: props => `${props.value} is not a valid national ID!`
-        }
-    },
-    emotion: {
-        type: String,
-        required: [true, 'กรุณาระบุอารมณ์']
-    },
-    intensity: {
-        type: Number,
-        required: [true, 'กรุณาระบุระดับความเข้มข้น'],
-        min: 1,
-        max: 10
-    },
-    thoughts: {
-        type: String,
-        required: [true, 'กรุณาบันทึกความคิด']
-    },
-    timestamp: {
-        type: Date,
-        default: Date.now
-    },
-    color: {
+  nationalId: {
+    type: String,
+    required: true
+  },
+  entries: [{
+    // Situation section
+    situation: {
+      forgetfulEvents: {
         type: String,
         required: true
+      },
+      eventImportance: {
+        type: String,
+        required: true
+      },
+      forgetfulReasons: {
+        type: String,
+        required: true
+      }
+    },
+    // Physical awareness section
+    physicalAwareness: {
+      bodySymptoms: {
+        type: String,
+        required: true
+      },
+      breathingChanges: {
+        type: String,
+        required: true
+      },
+      bodyTension: {
+        type: String,
+        required: true
+      }
+    },
+    // Emotions section
+    emotions: [{
+      type: String,
+      enum: ['Joy', 'Trust', 'Fear', 'Surprise', 'Sadness', 'Disgust', 'Anger', 'Anticipation']
+    }],
+    // Emotion-specific questions
+    emotionResponses: [{
+      emotion: {
+        type: String,
+        required: true
+      },
+      answers: [{
+        questionId: String,
+        question: String,
+        answer: String
+      }]
+    }],
+    createdAt: {
+      type: Date,
+      default: Date.now
     }
+  }]
 }, {
-    timestamps: true
+  timestamps: true
 });
 
-const Emotion = mongoose.model('Emotion', emotionSchema);
-module.exports = Emotion;
+module.exports = mongoose.model('Emotion', emotionSchema);
