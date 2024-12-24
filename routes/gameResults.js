@@ -71,41 +71,49 @@ router.post("/save-session", async (req, res) => {
 
 // Helper function to generate comparison messages
 function generateComparisonMessages(comparison) {
-  if (!comparison) return null;
+  if (!comparison) {
+    return {
+      overall: 'ยินดีด้วย! นี่เป็นครั้งแรกที่คุณเล่นเกมนี้',
+      levels: {}
+    };
+  }
 
   const messages = {
-    overall: "",
-    levels: {},
+    overall: '',
+    levels: {}
   };
 
   // Overall message
   if (comparison.totalTime.improved && comparison.totalMoves.improved) {
-    messages.overall =
-      "ยอดเยี่ยมมาก! คุณทำได้ดีขึ้นทั้งเวลาและจำนวนการเคลื่อนย้าย";
+    messages.overall = 'ยอดเยี่ยมมาก! คุณทำได้ดีขึ้นทั้งเวลาและจำนวนการเคลื่อนย้าย';
   } else if (comparison.totalTime.improved) {
-    messages.overall =
-      "เยี่ยม! คุณใช้เวลาน้อยลง แต่ยังมีโอกาสลดจำนวนการเคลื่อนย้ายได้อีก";
+    messages.overall = 'เยี่ยม! คุณใช้เวลาน้อยลง แต่ยังมีโอกาสลดจำนวนการเคลื่อนย้ายได้อีก';
   } else if (comparison.totalMoves.improved) {
-    messages.overall =
-      "ดีมาก! คุณใช้การเคลื่อนย้ายน้อยลง แต่ลองพยายามทำให้เร็วขึ้นอีกนิดนะ";
+    messages.overall = 'ดีมาก! คุณใช้การเคลื่อนย้ายน้อยลง แต่ลองพยายามทำให้เร็วขึ้นอีกนิดนะ';
   } else {
-    messages.overall = "ไม่เป็นไร! การฝึกฝนจะทำให้คุณทำได้ดีขึ้นในครั้งต่อไป";
+    messages.overall = 'ไม่เป็นไร! การฝึกฝนจะทำให้คุณทำได้ดีขึ้นในครั้งต่อไป';
+  }
+
+  // ถ้าไม่มีข้อมูลเปรียบเทียบระดับ ให้ส่งค่าว่างกลับไป
+  if (!comparison.games) {
+    return messages;
   }
 
   // Level specific messages
-  comparison.games.forEach((game) => {
+  comparison.games.forEach(game => {
+    if (!game) return; // ข้ามถ้าไม่มีข้อมูลเปรียบเทียบของระดับนั้น
+
     const levelMsg = [];
     if (game.time.improved) {
-      levelMsg.push("ใช้เวลาน้อยลง");
+      levelMsg.push('ใช้เวลาน้อยลง');
     }
     if (game.moves.improved) {
-      levelMsg.push("ใช้การเคลื่อนย้ายน้อยลง");
+      levelMsg.push('ใช้การเคลื่อนย้ายน้อยลง');
     }
 
-    messages.levels[game.level] =
-      levelMsg.length > 0
-        ? `ระดับ ${game.level}: ${levelMsg.join(" และ ")}`
-        : `ระดับ ${game.level}: พยายามต่อไป คุณทำได้!`;
+    messages.levels[game.level] = levelMsg.length > 0 
+      ? `ระดับ ${game.level}: ${levelMsg.join(' และ ')}`
+      : `ระดับ ${game.level}: พยายามต่อไป คุณทำได้!`;
   });
 
   return messages;
