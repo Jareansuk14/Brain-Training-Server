@@ -20,6 +20,7 @@ router.get("/:nationalId", async (req, res) => {
 router.post("/save-session", async (req, res) => {
   try {
     const { nationalId, sessionData } = req.body;
+
     let gameResult = await GameResult.findOne({ nationalId });
 
     if (!gameResult) {
@@ -29,17 +30,12 @@ router.post("/save-session", async (req, res) => {
       });
     }
 
-    // เรียงลำดับ games ตาม level ก่อนบันทึก
-    const sortedGames = [...sessionData.games].sort((a, b) => {
-      const levelOrder = { easy: 1, medium: 2, hard: 3 };
-      return levelOrder[a.level] - levelOrder[b.level];
-    });
-
+    // Add new session
     gameResult.sessions.push({
       completedAt: new Date(),
       totalTime: sessionData.totalTime,
       totalMoves: sessionData.totalMoves,
-      games: sortedGames,
+      games: sessionData.games,
     });
 
     // Keep only last 5 sessions
@@ -48,20 +44,14 @@ router.post("/save-session", async (req, res) => {
     }
 
     await gameResult.save();
+
+    // ส่งข้อมูลเปรียบเทียบกลับไป
     const comparison = gameResult.comparison;
 
     res.json({
       success: true,
       gameResult,
-      comparison: comparison || {
-        totalTime: { difference: 0, improved: false },
-        totalMoves: { difference: 0, improved: false },
-        games: sortedGames.map((game) => ({
-          level: game.level,
-          time: { difference: 0, improved: false },
-          moves: { difference: 0, improved: false },
-        })),
-      },
+      comparison,
       messages: generateComparisonMessages(comparison),
     });
   } catch (error) {
@@ -71,49 +61,41 @@ router.post("/save-session", async (req, res) => {
 
 // Helper function to generate comparison messages
 function generateComparisonMessages(comparison) {
-  if (!comparison) {
-    return {
-      overall: 'ยินดีด้วย! นี่เป็นครั้งแรกที่คุณเล่นเกมนี้',
-      levels: {}
-    };
-  }
+  if (!comparison) return null;
 
   const messages = {
-    overall: '',
-    levels: {}
+    overall: "",
+    levels: {},
   };
 
   // Overall message
   if (comparison.totalTime.improved && comparison.totalMoves.improved) {
-    messages.overall = 'ยอดเยี่ยมมาก! คุณทำได้ดีขึ้นทั้งเวลาและจำนวนการเคลื่อนย้าย';
+    messages.overall =
+      "ยอดเยี่ยมมาก! คุณทำได้ดีขึ้นทั้งเวลาและจำนวนการเคลื่อนย้าย";
   } else if (comparison.totalTime.improved) {
-    messages.overall = 'เยี่ยม! คุณใช้เวลาน้อยลง แต่ยังมีโอกาสลดจำนวนการเคลื่อนย้ายได้อีก';
+    messages.overall =
+      "เยี่ยม! คุณใช้เวลาน้อยลง แต่ยังมีโอกาสลดจำนวนการเคลื่อนย้ายได้อีก";
   } else if (comparison.totalMoves.improved) {
-    messages.overall = 'ดีมาก! คุณใช้การเคลื่อนย้ายน้อยลง แต่ลองพยายามทำให้เร็วขึ้นอีกนิดนะ';
+    messages.overall =
+      "ดีมาก! คุณใช้การเคลื่อนย้ายน้อยลง แต่ลองพยายามทำให้เร็วขึ้นอีกนิดนะ";
   } else {
-    messages.overall = 'ไม่เป็นไร! การฝึกฝนจะทำให้คุณทำได้ดีขึ้นในครั้งต่อไป';
-  }
-
-  // ถ้าไม่มีข้อมูลเปรียบเทียบระดับ ให้ส่งค่าว่างกลับไป
-  if (!comparison.games) {
-    return messages;
+    messages.overall = "ไม่เป็นไร! การฝึกฝนจะทำให้คุณทำได้ดีขึ้นในครั้งต่อไป";
   }
 
   // Level specific messages
-  comparison.games.forEach(game => {
-    if (!game) return; // ข้ามถ้าไม่มีข้อมูลเปรียบเทียบของระดับนั้น
-
+  comparison.games.forEach((game) => {
     const levelMsg = [];
     if (game.time.improved) {
-      levelMsg.push('ใช้เวลาน้อยลง');
+      levelMsg.push("ใช้เวลาน้อยลง");
     }
     if (game.moves.improved) {
-      levelMsg.push('ใช้การเคลื่อนย้ายน้อยลง');
+      levelMsg.push("ใช้การเคลื่อนย้ายน้อยลง");
     }
 
-    messages.levels[game.level] = levelMsg.length > 0 
-      ? `ระดับ ${game.level}: ${levelMsg.join(' และ ')}`
-      : `ระดับ ${game.level}: พยายามต่อไป คุณทำได้!`;
+    messages.levels[game.level] =
+      levelMsg.length > 0
+        ? `ระดับ ${game.level}: ${levelMsg.join(" และ ")}`
+        : `ระดับ ${game.level}: พยายามต่อไป คุณทำได้!`;
   });
 
   return messages;
