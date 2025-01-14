@@ -110,7 +110,7 @@ router.get('/questions/:emotion', async (req, res) => {
     Fear: [
       {
         id: 'fear_1',
-        question: 'คุณกลัวการลทมมากแค่ไหน?'
+        question: 'คุณกลัวการลืมมากแค่ไหน?'
       },
       {
         id: 'fear_2',
