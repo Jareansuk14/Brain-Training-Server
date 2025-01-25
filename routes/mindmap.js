@@ -1,33 +1,44 @@
 const express = require('express');
 const router = express.Router();
-const { MindMap, Node } = require('../models/MindMap');
+const mongoose = require('mongoose');
+const MindMap = require('../models/MindMap');
 
-// Get mind map
+// Get or create mind map for a user
 router.get('/:nationalId', async (req, res) => {
   try {
-    const { nationalId } = req.params;
-    console.log('Fetching mindmap for:', nationalId);
-
-    let mindMap = await MindMap.findOne({ nationalId });
+    console.log('Fetching mindmap for nationalId:', req.params.nationalId);
+    
+    let mindMap = await MindMap.findOne({ nationalId: req.params.nationalId });
     
     if (!mindMap) {
-      console.log('Creating new mindmap for:', nationalId);
-      mindMap = await MindMap.createWithRoot(nationalId);
+      // Create new mindmap with default root node
+      const rootNode = {
+        _id: new mongoose.Types.ObjectId(),
+        content: 'หัวข้อหลัก',
+        children: [],
+        isExpanded: true
+      };
+
+      mindMap = new MindMap({
+        nationalId: req.params.nationalId,
+        root: rootNode
+      });
+
+      await mindMap.save();
+      console.log('Created new mindmap:', mindMap);
     }
 
-    const tree = await mindMap.getFullTree();
-    console.log('Returning tree structure:', tree);
-    
     res.json({
-      _id: mindMap._id,
-      nationalId: mindMap.nationalId,
-      root: tree
+      success: true,
+      root: mindMap.root
     });
   } catch (error) {
     console.error('Error in GET /:nationalId:', error);
-    res.status(500).json({
+    // Send more specific error message
+    res.status(500).json({ 
+      success: false,
       error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'เกิดข้อผิดพลาดในการดึงข้อมูล Mind Map'
     });
   }
 });
@@ -35,31 +46,41 @@ router.get('/:nationalId', async (req, res) => {
 // Add new node
 router.post('/add-node', async (req, res) => {
   try {
-    const { nationalId, parentId, content } = req.body;
+    const { nationalId, parentId, content = 'หัวข้อใหม่' } = req.body;
     console.log('Adding node:', { nationalId, parentId, content });
 
-    const mindMap = await MindMap.findOne({ nationalId });
+    let mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
-      return res.status(404).json({ error: 'Mind map not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'ไม่พบข้อมูล Mind Map'
+      });
     }
 
-    const newNode = await mindMap.addNode(parentId, content);
-    console.log('Created new node:', newNode);
+    const newNode = mindMap.addNode(parentId, content);
+    if (!newNode) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'ไม่พบ node ที่ต้องการเพิ่มข้อมูล'
+      });
+    }
 
-    // Convert to the expected format
-    const nodeData = {
+    await mindMap.save();
+    console.log('Added new node:', newNode);
+
+    res.json({
+      success: true,
       _id: newNode._id,
       content: newNode.content,
-      isExpanded: newNode.isExpanded,
-      children: []
-    };
-
-    res.json(nodeData);
+      children: [],
+      isExpanded: true
+    });
   } catch (error) {
     console.error('Error in POST /add-node:', error);
-    res.status(500).json({
+    res.status(500).json({ 
+      success: false,
       error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'เกิดข้อผิดพลาดในการเพิ่ม node'
     });
   }
 });
@@ -72,25 +93,28 @@ router.post('/update-node', async (req, res) => {
 
     const mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
-      return res.status(404).json({ error: 'Mind map not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'ไม่พบข้อมูล Mind Map'
+      });
     }
 
-    const updatedNode = await mindMap.updateNode(nodeId, content);
-    console.log('Updated node:', updatedNode);
+    const updated = mindMap.updateNode(nodeId, { content });
+    if (!updated) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'ไม่พบ node ที่ต้องการแก้ไข'
+      });
+    }
 
-    res.json({ 
-      success: true, 
-      node: {
-        _id: updatedNode._id,
-        content: updatedNode.content,
-        isExpanded: updatedNode.isExpanded
-      }
-    });
+    await mindMap.save();
+    res.json({ success: true });
   } catch (error) {
     console.error('Error in POST /update-node:', error);
-    res.status(500).json({
+    res.status(500).json({ 
+      success: false,
       error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'เกิดข้อผิดพลาดในการแก้ไข node'
     });
   }
 });
@@ -103,18 +127,28 @@ router.post('/delete-node', async (req, res) => {
 
     const mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
-      return res.status(404).json({ error: 'Mind map not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'ไม่พบข้อมูล Mind Map'
+      });
     }
 
-    await mindMap.deleteNode(nodeId);
-    console.log('Successfully deleted node and its children');
+    const deleted = mindMap.deleteNode(nodeId);
+    if (!deleted) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'ไม่พบ node ที่ต้องการลบหรือไม่สามารถลบได้'
+      });
+    }
 
+    await mindMap.save();
     res.json({ success: true });
   } catch (error) {
     console.error('Error in POST /delete-node:', error);
-    res.status(500).json({
+    res.status(500).json({ 
+      success: false,
       error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'เกิดข้อผิดพลาดในการลบ node'
     });
   }
 });
@@ -125,23 +159,35 @@ router.post('/toggle-node', async (req, res) => {
     const { nationalId, nodeId } = req.body;
     console.log('Toggling node:', { nationalId, nodeId });
 
-    const node = await Node.findById(nodeId);
+    const mindMap = await MindMap.findOne({ nationalId });
+    if (!mindMap) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'ไม่พบข้อมูล Mind Map'
+      });
+    }
+
+    const { node } = mindMap.findNodeById(nodeId);
     if (!node) {
-      return res.status(404).json({ error: 'Node not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'ไม่พบ node ที่ต้องการ'
+      });
     }
 
     node.isExpanded = !node.isExpanded;
-    await node.save();
+    await mindMap.save();
 
     res.json({ 
-      success: true, 
-      isExpanded: node.isExpanded 
+      success: true,
+      isExpanded: node.isExpanded
     });
   } catch (error) {
     console.error('Error in POST /toggle-node:', error);
-    res.status(500).json({
+    res.status(500).json({ 
+      success: false,
       error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะการแสดงผล'
     });
   }
 });
