@@ -1,26 +1,39 @@
 const mongoose = require('mongoose');
 
-// Schema สำหรับ Node 
+// Schema สำหรับ Node แบบแยก collection
 const nodeSchema = new mongoose.Schema({
+  _id: {
+    type: mongoose.Schema.Types.ObjectId,
+    auto: true
+  },
+  mindMapId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'MindMap',
+    required: true
+  },
   content: {
     type: String,
-    required: true
+    required: true,
+    default: 'หัวข้อใหม่'
+  },
+  parentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null
+  },
+  isRoot: {
+    type: Boolean,
+    default: false
   },
   isExpanded: {
     type: Boolean,
     default: true
   },
-  children: [{
-    type: mongoose.Schema.Types.Mixed
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  order: {
+    type: Number,
+    default: 0
   }
+}, {
+  timestamps: true
 });
 
 // Schema หลักสำหรับ MindMap
@@ -30,118 +43,181 @@ const mindMapSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  root: {
-    type: nodeSchema,
-    required: true,
-    default: {
-      content: 'หัวข้อหลัก',
-      children: [],
-      isExpanded: true
-    }
-  },
-  lastModified: {
-    type: Date,
-    default: Date.now
+  rootNodeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Node'
   }
 }, {
-  timestamps: true 
+  timestamps: true
 });
 
-// Helper method to find node by ID recursively
-mindMapSchema.methods.findNodeById = function(nodeId, currentNode = this.root) {
-  if (currentNode._id.toString() === nodeId.toString()) {
-    return { node: currentNode, parent: null };
+const Node = mongoose.model('Node', nodeSchema);
+const MindMap = mongoose.model('MindMap', mindMapSchema);
+
+// Helper functions
+async function createMindMapWithRoot(nationalId) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // สร้าง MindMap ใหม่
+    const mindMap = await MindMap.create([{
+      nationalId
+    }], { session });
+
+    // สร้าง Root Node
+    const rootNode = await Node.create([{
+      mindMapId: mindMap[0]._id,
+      content: 'หัวข้อหลัก',
+      isRoot: true,
+      parentId: null
+    }], { session });
+
+    // อัพเดต rootNodeId ใน MindMap
+    mindMap[0].rootNodeId = rootNode[0]._id;
+    await mindMap[0].save({ session });
+
+    await session.commitTransaction();
+    return { mindMap: mindMap[0], rootNode: rootNode[0] };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
+}
 
-  if (currentNode.children && currentNode.children.length > 0) {
-    for (let i = 0; i < currentNode.children.length; i++) {
-      const result = this.findNodeById(nodeId, currentNode.children[i]);
-      if (result.node) {
-        return result.parent ? result : { node: result.node, parent: currentNode };
-      }
-    }
-  }
+async function getMindMapTree(mindMapId) {
+  // ดึงข้อมูล nodes ทั้งหมดของ mindMap นี้
+  const nodes = await Node.find({ mindMapId }).lean();
+  
+  // สร้าง map ของ nodes
+  const nodesMap = new Map();
+  nodes.forEach(node => {
+    nodesMap.set(node._id.toString(), {
+      ...node,
+      children: []
+    });
+  });
 
-  return { node: null, parent: null };
-};
-
-// Helper method to update node by ID
-mindMapSchema.methods.updateNode = function(nodeId, updates) {
-  const updateNodeInTree = (node) => {
-    if (!node) return false;
-    
-    if (node._id.toString() === nodeId.toString()) {
-      Object.assign(node, updates, {
-        updatedAt: new Date()
-      });
-      return true;
-    }
-    
-    if (node.children && node.children.length > 0) {
-      for (const child of node.children) {
-        if (updateNodeInTree(child)) return true;
-      }
-    }
-    
-    return false;
+  // สร้าง tree structure
+  const tree = {
+    nodes: {},
+    root: null
   };
 
-  const updated = updateNodeInTree(this.root);
-  if (updated) {
-    this.lastModified = new Date();
-  }
-  return updated;
-};
+  nodes.forEach(node => {
+    const nodeWithChildren = nodesMap.get(node._id.toString());
+    
+    if (node.isRoot) {
+      tree.root = nodeWithChildren;
+    } else if (node.parentId) {
+      const parent = nodesMap.get(node.parentId.toString());
+      if (parent) {
+        parent.children.push(nodeWithChildren);
+      }
+    }
+  });
 
-// Helper method to delete node by ID
-mindMapSchema.methods.deleteNode = function(nodeId) {
-  const { node, parent } = this.findNodeById(nodeId);
-  
-  if (!node) return false;
-  if (!parent) return false; // ป้องกันการลบ root node
-  
-  const index = parent.children.findIndex(
-    child => child._id.toString() === nodeId.toString()
+  return tree;
+}
+
+async function addNode(mindMapId, parentId, content = 'หัวข้อใหม่') {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // หา parent node
+    const parentNode = await Node.findOne({ 
+      mindMapId,
+      _id: parentId 
+    }).session(session);
+
+    if (!parentNode) {
+      throw new Error('Parent node not found');
+    }
+
+    // สร้าง node ใหม่
+    const newNode = await Node.create([{
+      mindMapId,
+      content,
+      parentId,
+      order: await Node.countDocuments({ parentId })
+    }], { session });
+
+    await session.commitTransaction();
+    return newNode[0];
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+}
+
+async function updateNode(mindMapId, nodeId, content) {
+  const node = await Node.findOneAndUpdate(
+    { _id: nodeId, mindMapId },
+    { content },
+    { new: true }
   );
   
-  if (index > -1) {
-    parent.children.splice(index, 1);
-    this.lastModified = new Date();
+  if (!node) {
+    throw new Error('Node not found');
+  }
+  
+  return node;
+}
+
+async function deleteNode(mindMapId, nodeId) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // ไม่อนุญาตให้ลบ root node
+    const node = await Node.findOne({ _id: nodeId, mindMapId }).session(session);
+    if (!node || node.isRoot) {
+      throw new Error('Cannot delete root node');
+    }
+
+    // ลบ node และ children ทั้งหมด
+    async function deleteNodeAndChildren(nodeId) {
+      const children = await Node.find({ parentId: nodeId }).session(session);
+      for (const child of children) {
+        await deleteNodeAndChildren(child._id);
+      }
+      await Node.deleteOne({ _id: nodeId }).session(session);
+    }
+
+    await deleteNodeAndChildren(nodeId);
+    await session.commitTransaction();
     return true;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-  
-  return false;
-};
+}
 
-// Helper method to add new node
-mindMapSchema.methods.addNode = function(parentId, content) {
-  const { node: parentNode } = this.findNodeById(parentId);
-  
-  if (!parentNode) return null;
-
-  const newNode = {
-    _id: new mongoose.Types.ObjectId(),
-    content: content || 'หัวข้อใหม่',
-    children: [],
-    isExpanded: true,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  };
-  
-  if (!parentNode.children) {
-    parentNode.children = [];
+async function toggleNode(mindMapId, nodeId) {
+  const node = await Node.findOne({ _id: nodeId, mindMapId });
+  if (!node) {
+    throw new Error('Node not found');
   }
-  
-  parentNode.children.push(newNode);
-  this.lastModified = new Date();
-  
-  return newNode;
+
+  node.isExpanded = !node.isExpanded;
+  await node.save();
+  return node;
+}
+
+module.exports = {
+  MindMap,
+  Node,
+  createMindMapWithRoot,
+  getMindMapTree,
+  addNode,
+  updateNode,
+  deleteNode,
+  toggleNode
 };
-
-// Add middleware to update lastModified before save
-mindMapSchema.pre('save', function(next) {
-  this.lastModified = new Date();
-  next();
-});
-
-module.exports = mongoose.model('MindMap', mindMapSchema);
