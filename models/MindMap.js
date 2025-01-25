@@ -1,98 +1,100 @@
-// server/models/MindMap.js
 const mongoose = require('mongoose');
 
-const topicSchema = new mongoose.Schema({
-    id: {
-        type: String,
-        required: true
-    },
-    text: {
-        type: String,
-        required: true
-    },
-    x: {
-        type: Number,
-        required: true
-    },
-    y: {
-        type: Number,
-        required: true
-    },
-    shape: {
-        type: String,
-        required: true,
-        enum: ['rectangle', 'rounded', 'ellipse', 'diamond', 'hexagon', 'parallelogram', 'octagon']
-    },
-    color: {
-        type: String,
-        required: true
-    },
-    width: {
-        type: Number,
-        required: true
-    },
-    height: {
-        type: Number,
-        required: true
-    },
-    fontSize: {
-        type: Number,
-        required: true
-    },
-    fontColor: {
-        type: String,
-        required: true
-    }
-});
-
-const connectionSchema = new mongoose.Schema({
-    id: {
-        type: String,
-        required: true
-    },
-    from: {
-        type: String,
-        required: true
-    },
-    to: {
-        type: String,
-        required: true
-    },
-    fromAnchor: {
-        type: String,
-        required: true,
-        enum: ['top', 'right', 'bottom', 'left']
-    },
-    toAnchor: {
-        type: String,
-        required: true,
-        enum: ['top', 'right', 'bottom', 'left']
-    },
-    type: {
-        type: String,
-        required: true,
-        enum: ['straight', 'curved', 'angled']
-    },
-    color: {
-        type: String,
-        required: true
-    }
+const nodeSchema = new mongoose.Schema({
+  content: {
+    type: String,
+    required: true
+  },
+  children: [{
+    type: mongoose.Schema.Types.Mixed
+  }],
+  isExpanded: {
+    type: Boolean,
+    default: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
 });
 
 const mindMapSchema = new mongoose.Schema({
-    nationalId: {
-        type: String,
-        required: true,
-        ref: 'User'
-    },
-    topics: [topicSchema],
-    connections: [connectionSchema]
+  nationalId: {
+    type: String,
+    required: true,
+    index: true
+  },
+  root: nodeSchema,
+  lastModified: {
+    type: Date,
+    default: Date.now
+  }
 }, {
-    timestamps: true
+  timestamps: true
 });
 
-// Add index for faster queries
-mindMapSchema.index({ nationalId: 1 });
+// Update lastModified before save
+mindMapSchema.pre('save', function(next) {
+  this.lastModified = new Date();
+  next();
+});
 
-const MindMap = mongoose.model('MindMap', mindMapSchema);
-module.exports = MindMap;
+// Helper method to find a node by ID recursively
+mindMapSchema.methods.findNodeById = function(nodeId, currentNode = this.root) {
+  if (currentNode._id.toString() === nodeId) {
+    return currentNode;
+  }
+  
+  if (currentNode.children) {
+    for (const child of currentNode.children) {
+      const found = this.findNodeById(nodeId, child);
+      if (found) return found;
+    }
+  }
+  
+  return null;
+};
+
+// Helper method to update a node by ID
+mindMapSchema.methods.updateNode = function(nodeId, updates) {
+  const updateNodeInTree = (node) => {
+    if (node._id.toString() === nodeId) {
+      Object.assign(node, updates);
+      return true;
+    }
+    
+    if (node.children) {
+      for (const child of node.children) {
+        if (updateNodeInTree(child)) return true;
+      }
+    }
+    
+    return false;
+  };
+  
+  updateNodeInTree(this.root);
+};
+
+// Helper method to delete a node by ID
+mindMapSchema.methods.deleteNode = function(nodeId) {
+  const deleteNodeFromTree = (node) => {
+    if (node.children) {
+      const initialLength = node.children.length;
+      node.children = node.children.filter(child => child._id.toString() !== nodeId);
+      
+      if (node.children.length === initialLength) {
+        for (const child of node.children) {
+          deleteNodeFromTree(child);
+        }
+      }
+    }
+  };
+  
+  deleteNodeFromTree(this.root);
+};
+
+module.exports = mongoose.model('MindMap', mindMapSchema);
