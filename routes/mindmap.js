@@ -3,13 +3,15 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const MindMap = require('../models/MindMap');
 
-// Get mind map for a user
+// ดึงข้อมูล mind map
 router.get('/:nationalId', async (req, res) => {
   try {
+    console.log('Fetching mindmap for nationalId:', req.params.nationalId);
+    
     let mindMap = await MindMap.findOne({ nationalId: req.params.nationalId });
     
     if (!mindMap) {
-      // If no mind map exists, create a new one with default root node
+      // สร้าง mind map ใหม่ถ้ายังไม่มี
       mindMap = new MindMap({
         nationalId: req.params.nationalId,
         root: {
@@ -22,163 +24,108 @@ router.get('/:nationalId', async (req, res) => {
       await mindMap.save();
     }
     
+    console.log('Found/Created mindmap:', mindMap);
     res.json(mindMap);
   } catch (error) {
-    console.error('Error fetching mind map:', error);
+    console.error('Error in GET /:nationalId:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Add new node
+// เพิ่ม node ใหม่
 router.post('/add-node', async (req, res) => {
   try {
     const { nationalId, parentId, content } = req.body;
-    
+    console.log('Adding node:', { nationalId, parentId, content });
+
     const mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
       return res.status(404).json({ error: 'Mind map not found' });
     }
 
-    const parentNode = mindMap.findNodeById(parentId);
-    if (!parentNode) {
+    const newNode = mindMap.addNode(parentId, content);
+    if (!newNode) {
       return res.status(404).json({ error: 'Parent node not found' });
     }
 
-    const newNode = {
-      _id: new mongoose.Types.ObjectId(),
-      content,
-      children: [],
-      isExpanded: true
-    };
-
-    parentNode.children = parentNode.children || [];
-    parentNode.children.push(newNode);
-    
     await mindMap.save();
+    console.log('Added new node:', newNode);
     res.json(newNode);
   } catch (error) {
-    console.error('Error adding node:', error);
+    console.error('Error in POST /add-node:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Update node content
+// อัพเดท node
 router.post('/update-node', async (req, res) => {
   try {
     const { nationalId, nodeId, content } = req.body;
-    
+    console.log('Updating node:', { nationalId, nodeId, content });
+
     const mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
       return res.status(404).json({ error: 'Mind map not found' });
     }
 
-    mindMap.updateNode(nodeId, { 
-      content,
-      updatedAt: new Date()
-    });
-    
+    const updated = mindMap.updateNode(nodeId, { content });
+    if (!updated) {
+      return res.status(404).json({ error: 'Node not found' });
+    }
+
     await mindMap.save();
+    console.log('Updated node successfully');
     res.json({ success: true });
   } catch (error) {
-    console.error('Error updating node:', error);
+    console.error('Error in POST /update-node:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Delete node
+// ลบ node
 router.post('/delete-node', async (req, res) => {
   try {
     const { nationalId, nodeId } = req.body;
-    
+    console.log('Deleting node:', { nationalId, nodeId });
+
     const mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
       return res.status(404).json({ error: 'Mind map not found' });
     }
 
-    // Prevent deleting root node
-    if (mindMap.root._id.toString() === nodeId) {
-      return res.status(400).json({ error: 'Cannot delete root node' });
+    const deleted = mindMap.deleteNode(nodeId);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Node not found or cannot be deleted' });
     }
 
-    mindMap.deleteNode(nodeId);
     await mindMap.save();
-    
+    console.log('Deleted node successfully');
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting node:', error);
+    console.error('Error in POST /delete-node:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Save entire mind map structure
+// บันทึก mind map ทั้งหมด
 router.post('/save', async (req, res) => {
   try {
-    const { nationalId, mindMapData } = req.body;
-    
-    let mindMap = await MindMap.findOne({ nationalId });
-    if (!mindMap) {
-      mindMap = new MindMap({
-        nationalId,
-        root: mindMapData.root
-      });
-    } else {
-      mindMap.root = mindMapData.root;
-      mindMap.lastModified = new Date();
-    }
-    
-    await mindMap.save();
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error saving mind map:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+    const { nationalId, root } = req.body;
+    console.log('Saving entire mindmap:', { nationalId });
 
-// Export mind map
-router.get('/export/:nationalId', async (req, res) => {
-  try {
-    const mindMap = await MindMap.findOne({ nationalId: req.params.nationalId });
-    if (!mindMap) {
-      return res.status(404).json({ error: 'Mind map not found' });
-    }
-
-    // Format the mind map data for export
-    const exportData = {
-      title: mindMap.root.content,
-      lastModified: mindMap.lastModified,
-      structure: mindMap.root
-    };
-
-    res.json(exportData);
-  } catch (error) {
-    console.error('Error exporting mind map:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Import mind map
-router.post('/import', async (req, res) => {
-  try {
-    const { nationalId, importData } = req.body;
-    
     let mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
       mindMap = new MindMap({ nationalId });
     }
 
-    // Validate import data structure
-    if (!importData.structure || typeof importData.structure !== 'object') {
-      return res.status(400).json({ error: 'Invalid import data structure' });
-    }
-
-    // Update the mind map with imported data
-    mindMap.root = importData.structure;
+    mindMap.root = root;
     mindMap.lastModified = new Date();
-    
     await mindMap.save();
+
+    console.log('Saved mindmap successfully');
     res.json({ success: true });
   } catch (error) {
-    console.error('Error importing mind map:', error);
+    console.error('Error in POST /save:', error);
     res.status(500).json({ error: error.message });
   }
 });
