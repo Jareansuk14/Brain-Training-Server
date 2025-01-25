@@ -1,11 +1,7 @@
 const mongoose = require('mongoose');
 
-// Schema สำหรับ Node
+// Schema สำหรับ Node 
 const nodeSchema = new mongoose.Schema({
-  _id: {
-    type: mongoose.Schema.Types.ObjectId,
-    auto: true
-  },
   content: {
     type: String,
     required: true
@@ -14,12 +10,9 @@ const nodeSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  children: {
-    type: [{
-      type: mongoose.Schema.Types.Mixed
-    }],
-    default: []
-  },
+  children: [{
+    type: mongoose.Schema.Types.Mixed
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -51,10 +44,10 @@ const mindMapSchema = new mongoose.Schema({
     default: Date.now
   }
 }, {
-  timestamps: true
+  timestamps: true 
 });
 
-// ฟังก์ชันช่วยค้นหา node ตาม ID
+// Helper method to find node by ID recursively
 mindMapSchema.methods.findNodeById = function(nodeId, currentNode = this.root) {
   if (currentNode._id.toString() === nodeId.toString()) {
     return { node: currentNode, parent: null };
@@ -72,17 +65,19 @@ mindMapSchema.methods.findNodeById = function(nodeId, currentNode = this.root) {
   return { node: null, parent: null };
 };
 
-// ฟังก์ชันอัพเดท node
+// Helper method to update node by ID
 mindMapSchema.methods.updateNode = function(nodeId, updates) {
   const updateNodeInTree = (node) => {
+    if (!node) return false;
+    
     if (node._id.toString() === nodeId.toString()) {
-      Object.assign(node, updates, { 
+      Object.assign(node, updates, {
         updatedAt: new Date()
       });
       return true;
     }
     
-    if (node.children) {
+    if (node.children && node.children.length > 0) {
       for (const child of node.children) {
         if (updateNodeInTree(child)) return true;
       }
@@ -98,12 +93,12 @@ mindMapSchema.methods.updateNode = function(nodeId, updates) {
   return updated;
 };
 
-// ฟังก์ชันลบ node
+// Helper method to delete node by ID
 mindMapSchema.methods.deleteNode = function(nodeId) {
   const { node, parent } = this.findNodeById(nodeId);
   
   if (!node) return false;
-  if (!parent) return false; // ไม่อนุญาตให้ลบ root node
+  if (!parent) return false; // ป้องกันการลบ root node
   
   const index = parent.children.findIndex(
     child => child._id.toString() === nodeId.toString()
@@ -118,15 +113,15 @@ mindMapSchema.methods.deleteNode = function(nodeId) {
   return false;
 };
 
-// ฟังก์ชันเพิ่ม node
+// Helper method to add new node
 mindMapSchema.methods.addNode = function(parentId, content) {
   const { node: parentNode } = this.findNodeById(parentId);
   
   if (!parentNode) return null;
-  
+
   const newNode = {
     _id: new mongoose.Types.ObjectId(),
-    content,
+    content: content || 'หัวข้อใหม่',
     children: [],
     isExpanded: true,
     createdAt: new Date(),
@@ -142,5 +137,11 @@ mindMapSchema.methods.addNode = function(parentId, content) {
   
   return newNode;
 };
+
+// Add middleware to update lastModified before save
+mindMapSchema.pre('save', function(next) {
+  this.lastModified = new Date();
+  next();
+});
 
 module.exports = mongoose.model('MindMap', mindMapSchema);
