@@ -33,26 +33,74 @@ router.get('/:nationalId', async (req, res) => {
 });
 
 // เพิ่ม node ใหม่
-router.post('/add-node', async (req, res) => {
+router.post('/add-child', async (req, res) => {
   try {
     const { nationalId, parentId, content } = req.body;
-    console.log('Adding node:', { nationalId, parentId, content });
+    console.log('Adding child node:', { nationalId, parentId, content });
 
     const mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
       return res.status(404).json({ error: 'Mind map not found' });
     }
 
-    const newNode = mindMap.addNode(parentId, content);
-    if (!newNode) {
+    const newNode = {
+      _id: new mongoose.Types.ObjectId(),
+      content,
+      children: [],
+      isExpanded: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const { node: parentNode } = mindMap.findNodeById(parentId);
+    if (!parentNode) {
       return res.status(404).json({ error: 'Parent node not found' });
     }
 
+    if (!parentNode.children) {
+      parentNode.children = [];
+    }
+    parentNode.children.push(newNode);
+    mindMap.lastModified = new Date();
+
     await mindMap.save();
-    console.log('Added new node:', newNode);
+    console.log('Added new node successfully:', newNode);
     res.json(newNode);
   } catch (error) {
-    console.error('Error in POST /add-node:', error);
+    console.error('Error in POST /add-child:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// บันทึก mind map ทั้งหมด
+router.post('/save-full', async (req, res) => {
+  try {
+    const { nationalId, root } = req.body;
+    console.log('Saving full mindmap for:', nationalId);
+
+    const processNode = (node) => {
+      return {
+        _id: node._id || new mongoose.Types.ObjectId(),
+        content: node.content,
+        isExpanded: node.isExpanded !== undefined ? node.isExpanded : true,
+        children: Array.isArray(node.children) ? node.children.map(processNode) : [],
+        updatedAt: new Date()
+      };
+    };
+
+    let mindMap = await MindMap.findOne({ nationalId });
+    if (!mindMap) {
+      mindMap = new MindMap({ nationalId });
+    }
+
+    mindMap.root = processNode(root);
+    mindMap.lastModified = new Date();
+    await mindMap.save();
+
+    console.log('Saved full mindmap successfully');
+    res.json({ success: true, mindMap });
+  } catch (error) {
+    console.error('Error in POST /save-full:', error);
     res.status(500).json({ error: error.message });
   }
 });
