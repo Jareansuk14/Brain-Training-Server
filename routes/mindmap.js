@@ -111,19 +111,32 @@ router.post('/delete-node', async (req, res) => {
 router.post('/save', async (req, res) => {
   try {
     const { nationalId, root } = req.body;
-    console.log('Saving entire mindmap:', { nationalId });
+    console.log('Saving entire mindmap for:', nationalId);
+
+    // Function to ensure all nodes have proper _id
+    const processNode = (node) => {
+      const processedNode = {
+        _id: node._id || new mongoose.Types.ObjectId(),
+        content: node.content,
+        isExpanded: node.isExpanded !== undefined ? node.isExpanded : true,
+        children: Array.isArray(node.children) ? node.children.map(processNode) : [],
+        updatedAt: new Date()
+      };
+      return processedNode;
+    };
 
     let mindMap = await MindMap.findOne({ nationalId });
     if (!mindMap) {
       mindMap = new MindMap({ nationalId });
     }
 
-    mindMap.root = root;
+    // Process and save the entire tree
+    mindMap.root = processNode(root);
     mindMap.lastModified = new Date();
     await mindMap.save();
 
     console.log('Saved mindmap successfully');
-    res.json({ success: true });
+    res.json({ success: true, mindMap });
   } catch (error) {
     console.error('Error in POST /save:', error);
     res.status(500).json({ error: error.message });
