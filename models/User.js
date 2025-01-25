@@ -4,13 +4,13 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
     nationalId: {
         type: String,
-        required: [true, 'กรุณากรอกเลขบัตรประชาชน'],
+        required: [true, 'กรุณากรอกหมายเลขผู้ใช้'],
         unique: true,
         validate: {
             validator: function(v) {
-                return /^\d{13}$/.test(v);
+                return /^\d{6}$/.test(v);
             },
-            message: 'รูปแบบเลขบัตรประชาชนไม่ถูกต้อง'
+            message: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง'
         }
     },
     basicInfo: {

@@ -8,11 +8,11 @@ router.post('/login', async (req, res) => {
   try {
     const { nationalId } = req.body;
     
-    // Validate national ID format
-    if (!/^\d{13}$/.test(nationalId)) {
+    // Validate user number format
+    if (!/^\d{6}$/.test(nationalId)) {
       return res.status(400).json({ 
         success: false,
-        error: 'รูปแบบเลขบัตรประชาชนไม่ถูกต้อง' 
+        error: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง' 
       });
     }
 
@@ -44,11 +44,11 @@ router.post('/register', async (req, res) => {
   try {
     const { nationalId } = req.body;
 
-    // Validate national ID format
-    if (!/^\d{13}$/.test(nationalId)) {
+    // Validate user number format
+    if (!/^\d{6}$/.test(nationalId)) {
       return res.status(400).json({ 
         success: false,
-        error: 'รูปแบบเลขบัตรประชาชนไม่ถูกต้อง' 
+        error: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง' 
       });
     }
 
@@ -57,7 +57,7 @@ router.post('/register', async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ 
         success: false,
-        error: 'เลขบัตรประชาชนนี้มีในระบบแล้ว' 
+        error: 'หมายเลขผู้ใช้นี้มีในระบบแล้ว' 
       });
     }
 
@@ -79,7 +79,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Check if national ID exists
 router.get('/check/:nationalId', async (req, res) => {
   try {
     const user = await User.findOne({ nationalId: req.params.nationalId });
