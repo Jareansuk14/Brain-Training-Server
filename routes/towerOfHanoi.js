@@ -58,31 +58,31 @@ router.post('/save-session', async (req, res) => {
 
     let userRecord = await TowerOfHanoi.findOne({ nationalId });
     let levelStat = userRecord.levelStats.find(stat => stat.level === level);
-    
-    // เก็บค่าเดิมไว้ก่อน
-    const previousTime = levelStat ? levelStat.lastTime : null;
-    const previousMoves = levelStat ? levelStat.lastMoves : null;
 
-    // สร้าง comparison โดยใช้ค่าเดิม
+    // เก็บค่าก่อนหน้าไว้ก่อนอัพเดต
+    const previousStats = {
+      time: levelStat ? levelStat.lastTime : null,
+      moves: levelStat ? levelStat.lastMoves : null
+    };
+
+    // สร้าง comparison โดยใช้ค่าที่เก็บไว้
     const comparison = levelStat ? {
       level,
       time: {
         current: timeSpent,
-        previous: previousTime,
-        difference: previousTime - timeSpent,
-        improved: timeSpent < previousTime,
-        bestTime: levelStat.bestTime
+        previous: previousStats.time,
+        difference: previousStats.time - timeSpent,
+        improved: timeSpent < previousStats.time
       },
       moves: {
         current: moves,
-        previous: previousMoves,
-        difference: previousMoves - moves,
-        improved: moves < previousMoves,
-        bestMoves: levelStat.bestMoves
+        previous: previousStats.moves,
+        difference: previousStats.moves - moves,
+        improved: moves < previousStats.moves
       }
     } : null;
 
-    // อัพเดตค่าใหม่หลังจากสร้าง comparison แล้ว
+    // อัพเดตค่าใหม่
     if (!levelStat) {
       levelStat = {
         level,
@@ -99,36 +99,35 @@ router.post('/save-session', async (req, res) => {
       };
       userRecord.levelStats.push(levelStat);
     } else {
-      // อัพเดตค่า best ถ้าจำเป็น
-      if (timeSpent < levelStat.bestTime) {
-        levelStat.bestTime = timeSpent;
-      }
-      if (moves < levelStat.bestMoves) {
-        levelStat.bestMoves = moves;
-      }
-
+      // อัพเดตค่า best
+      levelStat.bestTime = Math.min(levelStat.bestTime, timeSpent);
+      levelStat.bestMoves = Math.min(levelStat.bestMoves, moves);
+      
       // อัพเดตค่าล่าสุด
       levelStat.lastTime = timeSpent;
       levelStat.lastMoves = moves;
       levelStat.lastPlayedAt = new Date();
 
-      // เพิ่มประวัติ
       levelStat.history.push({
         completedAt: new Date(),
         timeSpent,
         moves
       });
+
+      if (levelStat.history.length > 5) {
+        levelStat.history = levelStat.history.slice(-5);
+      }
     }
 
     await userRecord.save();
 
+    // ส่งค่ากลับไป Frontend
     res.json({
       success: true,
       comparison,
-      messages: comparison ? generateComparisonMessages(comparison) : null,
       previousResults: {
-        lastTime: previousTime,
-        lastMoves: previousMoves,
+        lastTime: previousStats.time,
+        lastMoves: previousStats.moves,
         bestTime: levelStat.bestTime,
         bestMoves: levelStat.bestMoves
       }
