@@ -56,29 +56,34 @@ router.post('/save-session', async (req, res) => {
     const { nationalId, sessionData } = req.body;
     const { level, timeSpent, moves } = sessionData;
 
-    // ตรวจสอบข้อมูลที่จำเป็น
-    if (!nationalId || !level || timeSpent == null || moves == null) {
-      return res.status(400).json({ 
-        error: 'กรุณาระบุข้อมูลให้ครบถ้วน' 
-      });
-    }
-
     let userRecord = await TowerOfHanoi.findOne({ nationalId });
-    
-    // ถ้าไม่มีข้อมูลผู้เล่น ให้สร้างใหม่
-    if (!userRecord) {
-      userRecord = new TowerOfHanoi({ 
-        nationalId, 
-        levelStats: [] 
-      });
-    }
-
-    // หาหรือสร้างสถิติของระดับนั้น
     let levelStat = userRecord.levelStats.find(stat => stat.level === level);
-    let comparison = null;
+    
+    // เก็บค่าเดิมไว้ก่อน
+    const previousTime = levelStat ? levelStat.lastTime : null;
+    const previousMoves = levelStat ? levelStat.lastMoves : null;
 
+    // สร้าง comparison โดยใช้ค่าเดิม
+    const comparison = levelStat ? {
+      level,
+      time: {
+        current: timeSpent,
+        previous: previousTime,
+        difference: previousTime - timeSpent,
+        improved: timeSpent < previousTime,
+        bestTime: levelStat.bestTime
+      },
+      moves: {
+        current: moves,
+        previous: previousMoves,
+        difference: previousMoves - moves,
+        improved: moves < previousMoves,
+        bestMoves: levelStat.bestMoves
+      }
+    } : null;
+
+    // อัพเดตค่าใหม่หลังจากสร้าง comparison แล้ว
     if (!levelStat) {
-      // กรณีเล่นระดับนี้เป็นครั้งแรก
       levelStat = {
         level,
         bestTime: timeSpent,
@@ -94,26 +99,7 @@ router.post('/save-session', async (req, res) => {
       };
       userRecord.levelStats.push(levelStat);
     } else {
-      // กรณีเคยเล่นระดับนี้มาแล้ว
-      comparison = {
-        level,
-        time: {
-          current: timeSpent,
-          previous: levelStat.lastTime,
-          difference: levelStat.lastTime - timeSpent,
-          improved: timeSpent < levelStat.lastTime,
-          bestTime: levelStat.bestTime
-        },
-        moves: {
-          current: moves,
-          previous: levelStat.lastMoves,
-          difference: levelStat.lastMoves - moves,
-          improved: moves < levelStat.lastMoves,
-          bestMoves: levelStat.bestMoves
-        }
-      };
-
-      // อัพเดตสถิติที่ดีที่สุด
+      // อัพเดตค่า best ถ้าจำเป็น
       if (timeSpent < levelStat.bestTime) {
         levelStat.bestTime = timeSpent;
       }
@@ -121,31 +107,31 @@ router.post('/save-session', async (req, res) => {
         levelStat.bestMoves = moves;
       }
 
-      // อัพเดตผลล่าสุด
+      // อัพเดตค่าล่าสุด
       levelStat.lastTime = timeSpent;
       levelStat.lastMoves = moves;
       levelStat.lastPlayedAt = new Date();
 
-      // เพิ่มประวัติการเล่น
+      // เพิ่มประวัติ
       levelStat.history.push({
         completedAt: new Date(),
         timeSpent,
         moves
       });
-
-      // เก็บประวัติแค่ 5 ครั้งล่าสุด
-      if (levelStat.history.length > 5) {
-        levelStat.history = levelStat.history.slice(-5);
-      }
     }
 
     await userRecord.save();
 
-    // ส่งผลลัพธ์กลับไป
     res.json({
       success: true,
       comparison,
-      messages: comparison ? generateComparisonMessages(comparison) : null
+      messages: comparison ? generateComparisonMessages(comparison) : null,
+      previousResults: {
+        lastTime: previousTime,
+        lastMoves: previousMoves,
+        bestTime: levelStat.bestTime,
+        bestMoves: levelStat.bestMoves
+      }
     });
 
   } catch (error) {
