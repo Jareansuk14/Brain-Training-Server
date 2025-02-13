@@ -21,7 +21,7 @@ connectDB();
 
 // Middleware
 const corsOptions = {
-    origin: ['http://localhost:5173', 'http://localhost:3000'], // เพิ่ม domain ที่อนุญาต
+    origin: ['http://localhost:5173', 'http://localhost:3000', 'https://brain-training-omega.vercel.app'], // เพิ่ม domain ที่อนุญาต
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true // ถ้าต้องการส่ง cookies
