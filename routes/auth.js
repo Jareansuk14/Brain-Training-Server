@@ -7,11 +7,11 @@ router.post('/login', async (req, res) => {
   try {
     const { nationalId } = req.body;
     
-    // Validate user ID format
-    if (!/^[A-Za-z0-9]{1,6}$/.test(nationalId)) {
+    // Validate user ID format - บังคับให้กรอกครบ 6 ตัว
+    if (!/^[A-Za-z0-9]{6}$/.test(nationalId)) {
       return res.status(400).json({ 
         success: false,
-        error: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง' 
+        error: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง กรุณากรอกตัวอักษรภาษาอังกฤษหรือตัวเลขให้ครบ 6 ตัว' 
       });
     }
 
@@ -43,11 +43,11 @@ router.post('/register', async (req, res) => {
   try {
     const { nationalId } = req.body;
 
-    // Validate user ID format
-    if (!/^[A-Za-z0-9]{1,6}$/.test(nationalId)) {
+    // Validate user ID format - บังคับให้กรอกครบ 6 ตัว
+    if (!/^[A-Za-z0-9]{6}$/.test(nationalId)) {
       return res.status(400).json({ 
         success: false,
-        error: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง' 
+        error: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง กรุณากรอกตัวอักษรภาษาอังกฤษหรือตัวเลขให้ครบ 6 ตัว' 
       });
     }
 

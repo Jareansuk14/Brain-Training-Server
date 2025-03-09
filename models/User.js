@@ -7,9 +7,9 @@ const userSchema = new mongoose.Schema({
         unique: true,
         validate: {
             validator: function(v) {
-                return /^[A-Za-z0-9]{1,6}$/.test(v);
+                return /^[A-Za-z0-9]{6}$/.test(v);
             },
-            message: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง'
+            message: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง กรุณากรอกตัวอักษรภาษาอังกฤษหรือตัวเลขให้ครบ 6 ตัว'
         }
     },
     basicInfo: {
