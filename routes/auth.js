@@ -1,4 +1,3 @@
-// server/routes/auth.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
@@ -8,8 +7,8 @@ router.post('/login', async (req, res) => {
   try {
     const { nationalId } = req.body;
     
-    // Validate user number format
-    if (!/^\d{6}$/.test(nationalId)) {
+    // Validate user ID format
+    if (!/^[A-Za-z0-9]{1,6}$/.test(nationalId)) {
       return res.status(400).json({ 
         success: false,
         error: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง' 
@@ -44,8 +43,8 @@ router.post('/register', async (req, res) => {
   try {
     const { nationalId } = req.body;
 
-    // Validate user number format
-    if (!/^\d{6}$/.test(nationalId)) {
+    // Validate user ID format
+    if (!/^[A-Za-z0-9]{1,6}$/.test(nationalId)) {
       return res.status(400).json({ 
         success: false,
         error: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง' 

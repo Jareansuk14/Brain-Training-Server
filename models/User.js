@@ -1,4 +1,3 @@
-// server/models/User.js
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
@@ -8,7 +7,7 @@ const userSchema = new mongoose.Schema({
         unique: true,
         validate: {
             validator: function(v) {
-                return /^\d{6}$/.test(v);
+                return /^[A-Za-z0-9]{1,6}$/.test(v);
             },
             message: 'รูปแบบหมายเลขผู้ใช้ไม่ถูกต้อง'
         }
