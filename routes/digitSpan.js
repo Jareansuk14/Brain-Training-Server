@@ -17,6 +17,8 @@ router.get('/:nationalId', async (req, res) => {
 router.post('/save-session', async (req, res) => {
   try {
     const { nationalId, sessionData } = req.body;
+    
+    console.log('Received session data:', sessionData);
 
     let digitSpan = await DigitSpan.findOne({ nationalId });
     
@@ -26,6 +28,11 @@ router.post('/save-session', async (req, res) => {
         sessions: []
       });
     }
+    
+    // ตรวจสอบค่า successRate ที่ได้รับ
+    const successRate = parseFloat(sessionData.successRate) || 0;
+    const forwardSuccessRate = parseFloat(sessionData.forwardSuccessRate) || 0;
+    const backwardSuccessRate = parseFloat(sessionData.backwardSuccessRate) || 0;
 
     // เพิ่ม session ใหม่
     digitSpan.sessions.push({
@@ -33,9 +40,9 @@ router.post('/save-session', async (req, res) => {
       totalTime: sessionData.totalTime,
       forwardTime: sessionData.forwardTime || 0,
       backwardTime: sessionData.backwardTime || 0,
-      successRate: sessionData.successRate || 0,
-      forwardSuccessRate: sessionData.forwardSuccessRate || 0,
-      backwardSuccessRate: sessionData.backwardSuccessRate || 0,
+      successRate: successRate,
+      forwardSuccessRate: forwardSuccessRate,
+      backwardSuccessRate: backwardSuccessRate,
       modes: sessionData.modes || []
     });
 
@@ -57,6 +64,7 @@ router.post('/save-session', async (req, res) => {
     });
 
   } catch (error) {
+    console.error('Error saving session:', error);
     res.status(500).json({ error: error.message });
   }
 });
